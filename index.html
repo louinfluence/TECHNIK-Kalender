@@ -24,8 +24,7 @@
     }
 
     body {
-      display: flex;
-      flex-direction: column;
+      overflow: hidden;
     }
 
     /* -----------------------------------------------
@@ -88,14 +87,10 @@
     /* -----------------------------------------------
        TIMELINE-CONTAINER
     ----------------------------------------------- */
-    #wrap {
-      flex: 1;
-      min-height: 0;   /* wichtig für Flex-Overflow */
-      padding: 10px;
-    }
+    #wrap { padding: 10px; }
 
     #timeline {
-      height: 100%;
+      /* Höhe wird per JS gesetzt – vis-timeline ignoriert CSS height: 100% */
       border: 2px solid rgba(0,0,0,.18);
       border-radius: 16px;
       overflow: hidden;
@@ -512,6 +507,14 @@
     }
 
     // -----------------------------------------------
+    // Höhenberechnung – vis-timeline braucht px-Wert
+    // -----------------------------------------------
+    function timelineHeight() {
+      const headerH = document.querySelector("header").offsetHeight;
+      return window.innerHeight - headerH - 20; // 20 = wrap padding oben+unten
+    }
+
+    // -----------------------------------------------
     // Timeline initialisieren
     // -----------------------------------------------
     const container = document.getElementById("timeline");
@@ -520,6 +523,7 @@
     const options = {
       stack:           false,
       groupHeightMode: "fixed",
+      height:          timelineHeight(),
       zoomMin:         1000 * 60 * 30,            // 30 min
       zoomMax:         1000 * 60 * 60 * 24 * 30,  // 30 Tage
       selectable:      true,
@@ -557,6 +561,11 @@
       const e = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 22, 0, 0, 0);
       timeline.setWindow(s, e, { animation: true });
     }
+
+    // Höhe bei Drehen / Resize des Displays anpassen
+    window.addEventListener("resize", () => {
+      timeline.setOptions({ height: timelineHeight() });
+    });
 
     // Standard: heute anzeigen
     focusDay(new Date());
