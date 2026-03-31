@@ -180,12 +180,12 @@
 
         <div class="grid">
           <label>
-            Start (YYYY-MM-DD HH:MM)
-            <input id="f_start" required />
+            Start
+            <input id="f_start" type="datetime-local" required />
           </label>
           <label>
-            Ende (YYYY-MM-DD HH:MM)
-            <input id="f_end" />
+            Ende
+            <input id="f_end" type="datetime-local" />
           </label>
         </div>
 
@@ -256,15 +256,23 @@
     function pad(n) { return String(n).padStart(2, "0"); }
     function uid() { return Math.random().toString(16).slice(2) + Date.now().toString(16); }
 
+    // "YYYY-MM-DD HH:MM" – für Storage-Serialisierung
     function toLocalInput(d) {
       const dt = (d instanceof Date) ? d : new Date(d);
       return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
     }
 
+    // "YYYY-MM-DDTHH:MM" – für datetime-local Inputs
+    function toDatetimeLocal(d) {
+      const dt = (d instanceof Date) ? d : new Date(d);
+      return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    }
+
+    // Akzeptiert sowohl "YYYY-MM-DD HH:MM" (Storage) als auch "YYYY-MM-DDTHH:MM" (datetime-local)
     function parseLocalInput(s) {
-      const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?$/);
+      const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
       if (!m) return null;
-      return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||"00"), +(m[5]||"00"), 0, 0);
+      return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), 0, 0);
     }
 
     // Returns today's date string prefix: "YYYY-MM-DD"
@@ -368,7 +376,12 @@
         version: 1,
         savedAt: new Date().toISOString(),
         groups: groups.get(),
-        items: items.get()
+        // Date-Objekte explizit als lokale Zeitstrings serialisieren (kein UTC-Drift)
+        items: items.get().map(x => ({
+          ...x,
+          start: x.start instanceof Date ? toLocalInput(x.start) : x.start,
+          end:   x.end   instanceof Date ? toLocalInput(x.end)   : (x.end || undefined)
+        }))
       }, null, 2));
     }
 
@@ -537,14 +550,21 @@
       });
     }
 
+    // Ende automatisch 2h nach Start setzen, wenn Ende noch leer ist
+    f_start.addEventListener("change", () => {
+      if (f_end.value) return;
+      const s = parseLocalInput(f_start.value);
+      if (s) f_end.value = toDatetimeLocal(new Date(s.getTime() + 2 * 60 * 60 * 1000));
+    });
+
     function openEditor(ctx, done) {
       const { mode, item } = ctx;
       modalTitle.textContent = mode === "add" ? "Aufgabe hinzufügen" : "Aufgabe bearbeiten";
       refreshGroupOptions(item.group ?? groups.getIds()[0] ?? "orga");
 
       f_content.value     = item.content ?? "";
-      f_start.value       = toLocalInput(item.start ?? new Date());
-      f_end.value         = item.end ? toLocalInput(item.end) : "";
+      f_start.value       = toDatetimeLocal(item.start ?? new Date());
+      f_end.value         = item.end ? toDatetimeLocal(item.end) : "";
       f_note.value        = item.title ?? "";
       f_colorMode.value   = "none";
       f_color.value       = "#4b9bff";
@@ -565,7 +585,7 @@
         const start = parseLocalInput(f_start.value);
         const end   = f_end.value.trim() ? parseLocalInput(f_end.value) : null;
 
-        if (!start) { alert("Bitte Start korrekt angeben (YYYY-MM-DD HH:MM)."); return done(null); }
+        if (!start) { alert("Bitte ein gültiges Startdatum auswählen."); return done(null); }
         if (end && end < start) { alert("Ende darf nicht vor Start liegen."); return done(null); }
 
         const groupId = f_group.value;
