@@ -101,7 +101,7 @@
        VIS-TIMELINE – Zeilen & Labels
     ----------------------------------------------- */
 
-    /* Zeilen-Trennlinien */
+    /* Zeilen-Trennlinien – Höhe wird per JS dynamisch gesetzt (siehe #dynStyle) */
     .vis-timeline .vis-group {
       border-bottom: 2px solid rgba(0,0,0,.12) !important;
     }
@@ -114,7 +114,6 @@
       align-items: center !important;
       padding-left: 14px !important;
       border-bottom: 2px solid rgba(0,0,0,.12) !important;
-      min-height: 68px !important;
     }
 
     /* Balken-Text */
@@ -349,6 +348,9 @@
     </form>
   </dialog>
 
+  <!-- Dynamische Zeilenhöhe – per JS befüllt -->
+  <style id="dynStyle"></style>
+
   <script>
     // -----------------------------------------------
     // Storage Key
@@ -507,12 +509,24 @@
     }
 
     // -----------------------------------------------
-    // Höhenberechnung – vis-timeline braucht px-Wert
+    // Zeilenhöhe dynamisch berechnen und per CSS setzen
+    // Jede der 4 Zeilen bekommt genau 1/4 des Platzes
     // -----------------------------------------------
-    function timelineHeight() {
-      const headerH = document.querySelector("header").offsetHeight;
-      return window.innerHeight - headerH - 20; // 20 = wrap padding oben+unten
+    const dynStyle = document.getElementById("dynStyle");
+
+    function updateRowHeight() {
+      const headerH  = document.querySelector("header").offsetHeight;
+      const available = window.innerHeight - headerH - 20; // 20 = wrap padding
+      const axisH    = 52; // Zeitachse unten (vis-timeline Standard)
+      const numRows  = defaultGroups.length;
+      const rowH     = Math.max(Math.floor((available - axisH) / numRows), 60);
+      dynStyle.textContent = `
+        .vis-timeline .vis-group { min-height: ${rowH}px !important; height: ${rowH}px !important; }
+        .vis-timeline .vis-label { min-height: ${rowH}px !important; height: ${rowH}px !important; }
+      `;
     }
+
+    updateRowHeight(); // vor Timeline-Init aufrufen
 
     // -----------------------------------------------
     // Timeline initialisieren
@@ -523,7 +537,6 @@
     const options = {
       stack:           false,
       groupHeightMode: "fixed",
-      height:          timelineHeight(),
       zoomMin:         1000 * 60 * 30,            // 30 min
       zoomMax:         1000 * 60 * 60 * 24 * 30,  // 30 Tage
       selectable:      true,
@@ -562,9 +575,10 @@
       timeline.setWindow(s, e, { animation: true });
     }
 
-    // Höhe bei Drehen / Resize des Displays anpassen
+    // Zeilen neu berechnen bei Drehen / Resize
     window.addEventListener("resize", () => {
-      timeline.setOptions({ height: timelineHeight() });
+      updateRowHeight();
+      timeline.redraw();
     });
 
     // Standard: heute anzeigen
