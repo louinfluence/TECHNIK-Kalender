@@ -41,7 +41,6 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      /* dvh accounts for iOS Safari's collapsible toolbar */
       height: 100dvh;
       overflow: hidden;
       font-family: var(--font);
@@ -50,7 +49,7 @@
     }
 
     /* ═══════════════════════════════════════
-       HEADER — fixed height, never grows
+       HEADER
     ═══════════════════════════════════════ */
     header {
       flex: none;
@@ -114,31 +113,24 @@
 
     /* ═══════════════════════════════════════
        TIMELINE WRAPPER
-       flex:1 + min-height:0 fills remaining screen.
-       We measure #wrap.offsetHeight in JS to set
-       vis-timeline's pixel height — this is more
-       reliable than window.innerHeight math.
     ═══════════════════════════════════════ */
     #wrap {
       flex: 1;
       min-height: 0;
       padding: 10px;
-      display: flex;
-      flex-direction: column;
     }
     #timeline {
-      flex: 1;
-      min-height: 0;
       border: 2px solid var(--border2);
       border-radius: var(--r-lg);
       overflow: hidden;
       background: Canvas;
+      /* Höhe wird direkt per JS gesetzt */
     }
 
     /* ═══════════════════════════════════════
        VIS-TIMELINE OVERRIDES
-       !important is required where vis-timeline
-       sets the same properties via inline JS.
+       !important nötig wo vis-timeline inline-
+       Styles per JS setzt.
     ═══════════════════════════════════════ */
     .vis-timeline {
       border: none !important;
@@ -189,7 +181,7 @@
     .vis-item.fmt-underline .vis-item-content { text-decoration: underline; }
 
     /* ═══════════════════════════════════════
-       GEWERK COLORS — left-edge bar + label
+       GEWERK COLORS
     ═══════════════════════════════════════ */
     .vis-item.wk-buehne { box-shadow: inset 7px 0 0 var(--c-buehne); }
     .vis-item.wk-licht  { box-shadow: inset 7px 0 0 var(--c-licht);  }
@@ -227,9 +219,7 @@
     .modal-head b { font-size: 17px; font-weight: 800; }
 
     .modal-body { padding: 16px 18px; display: grid; gap: 14px; }
-
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
     label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
 
     input, select, textarea {
@@ -274,13 +264,9 @@
       border-top: 2px solid var(--border);
     }
     .spacer { flex: 1; }
-
-    /* ═══════════════════════════════════════
-       ROW HEIGHT — written by calcHeight() in JS
-       Placed after main styles so it wins without
-       needing extra specificity.
-    ═══════════════════════════════════════ */
   </style>
+
+  <!-- Zeilenhöhe: von calcHeight() in JS befüllt, steht nach dem Haupt-Stylesheet -->
   <style id="rowStyle"></style>
 </head>
 <body>
@@ -365,7 +351,7 @@
     'use strict';
 
     // ── Konstanten ─────────────────────────────────────────
-    const STORAGE_KEY = 'technik_kalender_v2';
+    const STORAGE_KEY = 'technik_kalender_v3'; // v3: frischer Start nach Bug-Fix
 
     const GROUPS = [
       { id: 'buehne', label: 'B\u00fchne', wk: 'wk-buehne' },
@@ -456,7 +442,7 @@
     }
     function saveData() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: new Date().toISOString(),
         items: items.get().map(x => ({
           ...x,
@@ -487,21 +473,29 @@
     });
     const items = new vis.DataSet(rawItems);
 
-    // ── H\u00f6henberechnung ────────────────────────────────────────
-    // Wir messen #wrap.offsetHeight (nach dem Flex-Layout) statt
-    // window.innerHeight minus Header — zuverl\u00e4ssiger auf iOS.
+    // ── Höhenberechnung ────────────────────────────────────
+    // Berechnet anhand window.innerHeight (zuverlässig auf iOS).
+    // groupHeightMode:'fixed' → vis-timeline teilt die Höhe gleichmäßig
+    // auf alle Gruppen auf, keine Gruppe kann kollabieren.
     const rowStyleEl = document.getElementById('rowStyle');
 
     function calcHeight() {
-      const wrap      = document.getElementById('wrap');
-      const available = wrap.offsetHeight - 20; // 10px padding oben + unten
-      const axisH     = 52;
-      const rowH      = Math.max(Math.floor((available - axisH) / GROUPS.length), 60);
+      const headerH = document.querySelector('header').offsetHeight;
+      const axisH   = 52;
+      const wrapH   = window.innerHeight - headerH - 20; // 10px Padding oben + unten
+      const rowH    = Math.max(Math.floor((wrapH - axisH) / GROUPS.length), 60);
+      const totalH  = rowH * GROUPS.length + axisH;
+
+      // #timeline explizit auf totalH setzen
+      document.getElementById('timeline').style.height = totalH + 'px';
+
+      // Zeilenhöhe auch per CSS setzen (Label-Höhe)
       rowStyleEl.textContent = [
-        `.vis-timeline .vis-group { min-height: ${rowH}px !important; }`,
-        `.vis-timeline .vis-label { min-height: ${rowH}px !important; }`,
+        `.vis-timeline .vis-group { height: ${rowH}px !important; }`,
+        `.vis-timeline .vis-label { height: ${rowH}px !important; }`,
       ].join('\n');
-      return available;
+
+      return totalH;
     }
 
     // ── Modal-Referenzen ───────────────────────────────────
@@ -577,112 +571,110 @@
       fName.focus(); fName.select();
     }
 
-    // ── Timeline — in requestAnimationFrame erstellen ──────
-    // RAF stellt sicher, dass der Browser das Flex-Layout abgeschlossen
-    // hat, bevor wir #wrap.offsetHeight messen.
-    let timeline;
+    // ── Timeline erstellen ─────────────────────────────────
+    // Kein RAF nötig: window.innerHeight ist sofort korrekt.
+    // groupHeightMode:'fixed' → alle 4 Zeilen immer gleich groß,
+    // keine Zeile kann auf 0 kollabieren.
+    const timeline = new vis.Timeline(
+      document.getElementById('timeline'),
+      items,
+      groups,
+      {
+        height:          calcHeight(),
+        stack:           false,
+        groupHeightMode: 'fixed',   // ← FIX: alle Zeilen immer gleich groß
+        zoomMin:         1000 * 60 * 30,
+        zoomMax:         1000 * 60 * 60 * 24 * 30,
+        selectable:      true,
+        multiselect:     false,
+        showCurrentTime: true,
+        margin:          { item: 8, axis: 5 },
+        editable:        { add: true, updateTime: true, updateGroup: true, remove: true },
+        onAdd(item, cb) {
+          openEditor({ mode:'add', item:{ ...item, id:uid(), type:'range' } }, r => {
+            cb(r ?? null);
+            if (r) saveData();
+          });
+        },
+        onUpdate(item, cb) {
+          openEditor({ mode:'edit', item:{ ...item } }, r => {
+            cb(r ?? null);
+            if (r) saveData();
+          });
+        },
+        onRemove(item, cb) {
+          if (!confirm(`Aufgabe l\u00f6schen?\n\n${item.content}`)) return cb(null);
+          cb(item);
+          saveData();
+        },
+      }
+    );
 
-    requestAnimationFrame(() => {
-      timeline = new vis.Timeline(
-        document.getElementById('timeline'),
-        items,
-        groups,
-        {
-          height:          calcHeight(),
-          stack:           false,
-          groupHeightMode: 'auto',
-          zoomMin:         1000 * 60 * 30,
-          zoomMax:         1000 * 60 * 60 * 24 * 30,
-          selectable:      true,
-          multiselect:     false,
-          showCurrentTime: true,
-          margin:          { item: 8, axis: 5 },
-          editable:        { add: true, updateTime: true, updateGroup: true, remove: true },
-          onAdd(item, cb) {
-            openEditor({ mode:'add', item:{ ...item, id:uid(), type:'range' } }, r => {
-              cb(r ?? null);
-              if (r) saveData();
-            });
-          },
-          onUpdate(item, cb) {
-            openEditor({ mode:'edit', item:{ ...item } }, r => {
-              cb(r ?? null);
-              if (r) saveData();
-            });
-          },
-          onRemove(item, cb) {
-            if (!confirm(`Aufgabe l\u00f6schen?\n\n${item.content}`)) return cb(null);
-            cb(item);
-            saveData();
-          },
-        }
-      );
-
-      // Heute anzeigen
+    // Heute anzeigen
+    (function() {
       const t = new Date();
       timeline.setWindow(
         new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
         new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
         { animation: false }
       );
+    })();
 
-      // Toolbar-Events (brauchen timeline-Referenz)
-      document.getElementById('addBtn').onclick = () => {
-        const now   = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours()+1, 0);
-        const end   = new Date(start.getTime() + 2*60*60*1000);
-        const gid   = GROUPS[0].id;
-        openEditor({
-          mode: 'add',
-          item: { id:uid(), group:gid, content:'', start, end, type:'range',
-            className: buildCls({ groupId:gid, status:'status-todo', existing:'' }) }
-        }, r => { if (!r) return; items.add(r); saveData(); });
-      };
-
-      document.getElementById('delBtn').onclick = () => {
-        const sel = timeline.getSelection();
-        if (!sel.length) return alert('Bitte zuerst eine Aufgabe antippen.');
-        const it = items.get(sel[0]);
-        if (!confirm(`Aufgabe l\u00f6schen?\n\n${it.content}`)) return;
-        items.remove(sel[0]);
-        saveData();
-      };
-
-      document.getElementById('focusTodayBtn').onclick = () => {
-        const t = new Date();
-        timeline.setWindow(
-          new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
-          new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
-          { animation: true }
-        );
-      };
-
-      document.getElementById('focusAllBtn').onclick = () => timeline.fit({ animation: true });
-
-      document.getElementById('focusPickBtn').onclick = () => {
-        const v = document.getElementById('focusDate').value;
-        if (!v) return alert('Bitte erst ein Datum w\u00e4hlen.');
-        const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!m) return;
-        const d = new Date(+m[1], +m[2]-1, +m[3]);
-        timeline.setWindow(
-          new Date(d.getFullYear(), d.getMonth(), d.getDate(),  6, 0),
-          new Date(d.getFullYear(), d.getMonth(), d.getDate(), 22, 0),
-          { animation: true }
-        );
-      };
-
-      // Fenster-Resize
-      window.addEventListener('resize', () => {
-        timeline.setOptions({ height: calcHeight() });
-      });
-
-      // Autosave
-      items.on('*', saveData);
+    // Fenster-Resize
+    window.addEventListener('resize', () => {
+      timeline.setOptions({ height: calcHeight() });
     });
 
-    // Datum-Input vorbelegen
+    // Autosave
+    items.on('*', saveData);
+
+    // ── Toolbar ────────────────────────────────────────────
     document.getElementById('focusDate').value = todayStr();
+
+    document.getElementById('addBtn').onclick = () => {
+      const now   = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours()+1, 0);
+      const end   = new Date(start.getTime() + 2*60*60*1000);
+      const gid   = GROUPS[0].id;
+      openEditor({
+        mode: 'add',
+        item: { id:uid(), group:gid, content:'', start, end, type:'range',
+          className: buildCls({ groupId:gid, status:'status-todo', existing:'' }) }
+      }, r => { if (!r) return; items.add(r); saveData(); });
+    };
+
+    document.getElementById('delBtn').onclick = () => {
+      const sel = timeline.getSelection();
+      if (!sel.length) return alert('Bitte zuerst eine Aufgabe antippen.');
+      const it = items.get(sel[0]);
+      if (!confirm(`Aufgabe l\u00f6schen?\n\n${it.content}`)) return;
+      items.remove(sel[0]);
+      saveData();
+    };
+
+    document.getElementById('focusTodayBtn').onclick = () => {
+      const t = new Date();
+      timeline.setWindow(
+        new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
+        new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
+        { animation: true }
+      );
+    };
+
+    document.getElementById('focusAllBtn').onclick = () => timeline.fit({ animation: true });
+
+    document.getElementById('focusPickBtn').onclick = () => {
+      const v = document.getElementById('focusDate').value;
+      if (!v) return alert('Bitte erst ein Datum w\u00e4hlen.');
+      const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return;
+      const d = new Date(+m[1], +m[2]-1, +m[3]);
+      timeline.setWindow(
+        new Date(d.getFullYear(), d.getMonth(), d.getDate(),  6, 0),
+        new Date(d.getFullYear(), d.getMonth(), d.getDate(), 22, 0),
+        { animation: true }
+      );
+    };
 
     document.getElementById('resetBtn').onclick = () => {
       if (!confirm('Demo-Plan laden? Gespeicherte Daten werden \u00fcberschrieben.')) return;
