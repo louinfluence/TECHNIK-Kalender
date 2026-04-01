@@ -2,152 +2,300 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>TECHNIK-Kalender</title>
 
   <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
   <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
 
-  <!-- Zeilenhöhe wird per JS in dieses Tag geschrieben -->
-  <style id="rowStyle"></style>
-
   <style>
-    :root { color-scheme: light dark; }
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
-      font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; }
+    /* ═══════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════ */
+    :root {
+      --c-buehne: #7c3aed;
+      --c-licht:  #ca8a04;
+      --c-ton:    #0284c7;
+      --c-video:  #0d9488;
 
-    /* HEADER */
-    header {
-      padding: 10px 14px;
-      border-bottom: 2px solid rgba(0,0,0,.18);
-      background: Canvas;
-      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      --border:   rgba(0,0,0,.15);
+      --border2:  rgba(0,0,0,.25);
+      --surface:  rgba(0,0,0,.04);
+      --r-sm: 8px;
+      --r-md: 12px;
+      --r-lg: 16px;
+      --font: system-ui, -apple-system, "Helvetica Neue", sans-serif;
     }
-    header h1 { font-size: 18px; font-weight: 800; margin: 0 6px 0 0; }
 
-    /* BUTTONS */
+    /* ═══════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      height: 100%;
+      color-scheme: light dark;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      /* dvh accounts for iOS Safari's collapsible toolbar */
+      height: 100dvh;
+      overflow: hidden;
+      font-family: var(--font);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ═══════════════════════════════════════
+       HEADER — fixed height, never grows
+    ═══════════════════════════════════════ */
+    header {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: Canvas;
+      border-bottom: 2px solid var(--border2);
+    }
+    header h1 {
+      margin: 0 4px 0 0;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    /* ═══════════════════════════════════════
+       BUTTONS
+    ═══════════════════════════════════════ */
     .btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-height: 44px; padding: 0 16px;
-      font-size: 15px; font-weight: 600;
-      border-radius: 12px; border: 2px solid rgba(0,0,0,.18);
-      background: rgba(0,0,0,.04); color: inherit;
-      cursor: pointer; user-select: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 16px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: var(--font);
+      border: 2px solid var(--border2);
+      border-radius: var(--r-md);
+      background: var(--surface);
+      color: inherit;
+      cursor: pointer;
+      user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     .btn:active { transform: scale(.97); }
-    .btn.danger  { border-color: rgba(220,40,40,.45);  color: rgb(200,20,20); }
-    .btn.primary { border-color: rgba(0,90,255,.45);   color: rgb(0,80,230); }
-    .sep { width: 2px; height: 32px; background: rgba(0,0,0,.15); border-radius: 2px; margin: 0 2px; }
-    #focusDate {
-      min-height: 44px; padding: 0 12px; font-size: 15px;
-      border: 2px solid rgba(0,0,0,.18); border-radius: 12px;
-      background: rgba(0,0,0,.04); color: inherit;
+    .btn.primary { border-color: rgba(0,90,255,.5);   color: rgb(0,80,230); }
+    .btn.danger  { border-color: rgba(220,40,40,.5);  color: rgb(200,20,20); }
+
+    .sep {
+      flex: none;
+      width: 2px;
+      height: 32px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 2px;
     }
 
-    /* TIMELINE-WRAPPER */
-    #wrap { padding: 10px; }
+    #focusDate {
+      min-height: 44px;
+      padding: 0 12px;
+      font-size: 15px;
+      font-family: var(--font);
+      border: 2px solid var(--border2);
+      border-radius: var(--r-md);
+      background: var(--surface);
+      color: inherit;
+    }
+
+    /* ═══════════════════════════════════════
+       TIMELINE WRAPPER
+       flex:1 + min-height:0 fills remaining screen.
+       We measure #wrap.offsetHeight in JS to set
+       vis-timeline's pixel height — this is more
+       reliable than window.innerHeight math.
+    ═══════════════════════════════════════ */
+    #wrap {
+      flex: 1;
+      min-height: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
     #timeline {
-      border: 2px solid rgba(0,0,0,.18);
-      border-radius: 16px;
+      flex: 1;
+      min-height: 0;
+      border: 2px solid var(--border2);
+      border-radius: var(--r-lg);
       overflow: hidden;
       background: Canvas;
     }
 
-    /* VIS-TIMELINE GRUNDSTILE */
-    .vis-timeline .vis-group  { border-bottom: 2px solid rgba(0,0,0,.14) !important; }
-    .vis-timeline .vis-label  {
-      font-size: 16px !important; font-weight: 700 !important;
-      display: flex !important; align-items: center !important;
+    /* ═══════════════════════════════════════
+       VIS-TIMELINE OVERRIDES
+       !important is required where vis-timeline
+       sets the same properties via inline JS.
+    ═══════════════════════════════════════ */
+    .vis-timeline {
+      border: none !important;
+      font-family: var(--font) !important;
+    }
+    .vis-label {
+      display: flex !important;
+      align-items: center !important;
       padding-left: 14px !important;
-      border-bottom: 2px solid rgba(0,0,0,.14) !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      border-bottom: 2px solid var(--border) !important;
     }
-    .vis-timeline .vis-item .vis-item-content {
-      font-size: 14px !important; font-weight: 600 !important;
-      overflow: visible !important; white-space: nowrap !important;
-      padding: 0 10px !important;
+    .vis-group {
+      border-bottom: 2px solid var(--border) !important;
     }
-    .vis-timeline .vis-item {
-      overflow: visible !important;
+    .vis-time-axis .vis-text {
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+    .vis-item {
       border-width: 2px !important;
-      border-radius: 8px !important;
+      border-radius: var(--r-sm) !important;
+      overflow: visible !important;
     }
-    .vis-timeline .vis-time-axis .vis-text { font-size: 13px !important; font-weight: 600 !important; }
+    .vis-item .vis-item-content {
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      padding: 0 10px !important;
+      white-space: nowrap !important;
+      overflow: visible !important;
+    }
 
-    /* STATUS-FARBEN */
+    /* ═══════════════════════════════════════
+       STATUS COLORS
+    ═══════════════════════════════════════ */
     .vis-item.status-todo     { background: rgba(160,160,160,.28); border-color: rgba(110,110,110,.85); }
-    .vis-item.status-doing    { background: rgba(37,99,235,.22);   border-color: rgba(37,99,235,.9); }
-    .vis-item.status-wait     { background: rgba(217,119,6,.22);   border-color: rgba(217,119,6,.9); }
-    .vis-item.status-critical { background: rgba(220,38,38,.22);   border-color: rgba(220,38,38,.9); }
-    .vis-item.status-done     { background: rgba(22,163,74,.20);   border-color: rgba(22,163,74,.85); opacity:.9; }
+    .vis-item.status-doing    { background: rgba( 37, 99,235,.22); border-color: rgba( 37, 99,235,.90); }
+    .vis-item.status-wait     { background: rgba(217,119,  6,.22); border-color: rgba(217,119,  6,.90); }
+    .vis-item.status-critical { background: rgba(220, 38, 38,.22); border-color: rgba(220, 38, 38,.90); }
+    .vis-item.status-done     { background: rgba( 22,163, 74,.20); border-color: rgba( 22,163, 74,.85); opacity: .9; }
 
-    /* TEXTFORMAT */
+    /* ═══════════════════════════════════════
+       TEXT FORMAT CLASSES
+    ═══════════════════════════════════════ */
     .vis-item.fmt-bold .vis-item-content      { font-weight: 800 !important; }
     .vis-item.fmt-italic .vis-item-content    { font-style: italic; }
     .vis-item.fmt-underline .vis-item-content { text-decoration: underline; }
 
-    /* GEWERK-FARBEN (linke Kante) */
-    .vis-item.wk-buehne { box-shadow: inset 7px 0 0 #7c3aed; }
-    .vis-item.wk-licht  { box-shadow: inset 7px 0 0 #ca8a04; }
-    .vis-item.wk-ton    { box-shadow: inset 7px 0 0 #0284c7; }
-    .vis-item.wk-video  { box-shadow: inset 7px 0 0 #0d9488; }
+    /* ═══════════════════════════════════════
+       GEWERK COLORS — left-edge bar + label
+    ═══════════════════════════════════════ */
+    .vis-item.wk-buehne { box-shadow: inset 7px 0 0 var(--c-buehne); }
+    .vis-item.wk-licht  { box-shadow: inset 7px 0 0 var(--c-licht);  }
+    .vis-item.wk-ton    { box-shadow: inset 7px 0 0 var(--c-ton);    }
+    .vis-item.wk-video  { box-shadow: inset 7px 0 0 var(--c-video);  }
 
-    /* LABEL-FARBEN */
-    .vis-label.wk-buehne { border-left: 8px solid #7c3aed !important; background: rgba(124,58,237,.07); }
-    .vis-label.wk-licht  { border-left: 8px solid #ca8a04 !important; background: rgba(202,138,4,.07); }
-    .vis-label.wk-ton    { border-left: 8px solid #0284c7 !important; background: rgba(2,132,199,.07); }
-    .vis-label.wk-video  { border-left: 8px solid #0d9488 !important; background: rgba(13,148,136,.07); }
+    .vis-label.wk-buehne { border-left: 8px solid var(--c-buehne) !important; background: rgba(124, 58,237,.07); }
+    .vis-label.wk-licht  { border-left: 8px solid var(--c-licht)  !important; background: rgba(202,138,  4,.07); }
+    .vis-label.wk-ton    { border-left: 8px solid var(--c-ton)    !important; background: rgba(  2,132,199,.07); }
+    .vis-label.wk-video  { border-left: 8px solid var(--c-video)  !important; background: rgba( 13,148,136,.07); }
 
-    /* MODAL */
+    /* ═══════════════════════════════════════
+       MODAL
+    ═══════════════════════════════════════ */
     dialog {
       width: min(680px, 96vw);
-      border: 2px solid rgba(0,0,0,.2); border-radius: 18px;
-      padding: 0; background: Canvas; color: CanvasText;
+      max-height: 92dvh;
+      overflow-y: auto;
+      border: 2px solid var(--border2);
+      border-radius: 18px;
+      padding: 0;
+      background: Canvas;
+      color: CanvasText;
     }
     dialog::backdrop { background: rgba(0,0,0,.45); }
-    .modal-head { padding: 16px 18px 12px; border-bottom: 2px solid rgba(0,0,0,.1); }
+
+    .modal-head {
+      position: sticky;
+      top: 0;
+      padding: 16px 18px 12px;
+      background: Canvas;
+      border-bottom: 2px solid var(--border);
+      z-index: 1;
+    }
     .modal-head b { font-size: 17px; font-weight: 800; }
+
     .modal-body { padding: 16px 18px; display: grid; gap: 14px; }
+
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
     label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+
     input, select, textarea {
-      min-height: 48px; padding: 10px 14px;
-      border-radius: 12px; border: 2px solid rgba(0,0,0,.2);
-      background: rgba(0,0,0,.03); color: inherit; font-size: 15px;
+      min-height: 48px;
+      padding: 10px 14px;
+      border-radius: var(--r-md);
+      border: 2px solid var(--border2);
+      background: var(--surface);
+      color: inherit;
+      font-size: 15px;
+      font-family: var(--font);
     }
     input[type="color"] { min-height: 48px; padding: 4px 8px; cursor: pointer; }
     textarea { min-height: 80px; resize: vertical; }
-    .toggle-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    .toggle-row { display: flex; gap: 10px; flex-wrap: wrap; }
     .pill {
-      display: inline-flex; align-items: center; gap: 8px;
-      min-height: 44px; border: 2px solid rgba(0,0,0,.18);
-      border-radius: 999px; padding: 0 14px;
-      background: rgba(0,0,0,.03); font-size: 15px;
-      cursor: pointer; user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 14px;
+      border: 2px solid var(--border2);
+      border-radius: 999px;
+      background: var(--surface);
+      font-size: 15px;
+      cursor: pointer;
+      user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     .pill input { transform: scale(1.2); }
+
     .modal-foot {
-      padding: 14px 18px; border-top: 2px solid rgba(0,0,0,.1);
-      display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      background: Canvas;
+      border-top: 2px solid var(--border);
     }
     .spacer { flex: 1; }
+
+    /* ═══════════════════════════════════════
+       ROW HEIGHT — written by calcHeight() in JS
+       Placed after main styles so it wins without
+       needing extra specificity.
+    ═══════════════════════════════════════ */
   </style>
+  <style id="rowStyle"></style>
 </head>
 <body>
 
   <header>
     <h1>TECHNIK-Kalender</h1>
     <button class="btn primary" id="addBtn">+ Aufgabe</button>
-    <button class="btn danger"  id="delBtn">Löschen</button>
+    <button class="btn danger"  id="delBtn">L&#246;schen</button>
     <div class="sep"></div>
     <button class="btn" id="focusTodayBtn">Heute</button>
     <button class="btn" id="focusAllBtn">Alles</button>
     <input id="focusDate" type="date" />
     <button class="btn" id="focusPickBtn">Anzeigen</button>
     <div class="sep"></div>
-    <button class="btn" id="resetBtn">Zurücksetzen</button>
+    <button class="btn" id="resetBtn">Zur&#252;cksetzen</button>
   </header>
 
   <div id="wrap">
@@ -202,7 +350,7 @@
           <label class="pill"><input type="checkbox" id="f_underline"> Unterstrichen</label>
         </div>
         <label>Notiz (Tooltip, optional)
-          <textarea id="f_note" placeholder="Ansprechpartner, Abhängigkeiten…"></textarea>
+          <textarea id="f_note" placeholder="Ansprechpartner, Abh&#228;ngigkeiten&#8230;"></textarea>
         </label>
       </div>
       <div class="modal-foot">
@@ -216,8 +364,19 @@
   <script>
     'use strict';
 
-    // ── Storage ────────────────────────────────────────────
-    const STORAGE_KEY = 'technik_kalender_v2'; // v2 = frischer Start, keine alten Gruppen-Probleme
+    // ── Konstanten ─────────────────────────────────────────
+    const STORAGE_KEY = 'technik_kalender_v2';
+
+    const GROUPS = [
+      { id: 'buehne', label: 'B\u00fchne', wk: 'wk-buehne' },
+      { id: 'licht',  label: 'Licht',      wk: 'wk-licht'  },
+      { id: 'ton',    label: 'Ton',         wk: 'wk-ton'    },
+      { id: 'video',  label: 'Video',       wk: 'wk-video'  },
+    ];
+    const WK_MAP     = Object.fromEntries(GROUPS.map(g => [g.id, g.wk]));
+    const STATUS_CLS = ['status-todo','status-doing','status-wait','status-critical','status-done'];
+    const FORMAT_CLS = ['fmt-bold','fmt-italic','fmt-underline'];
+    const WK_CLS     = GROUPS.map(g => g.wk);
 
     // ── Helpers ────────────────────────────────────────────
     const pad = n => String(n).padStart(2, '0');
@@ -242,32 +401,24 @@
     }
 
     // ── Klassen-System ─────────────────────────────────────
-    const GROUPS = [
-      { id: 'buehne', label: 'Bühne',  wk: 'wk-buehne' },
-      { id: 'licht',  label: 'Licht',  wk: 'wk-licht'  },
-      { id: 'ton',    label: 'Ton',    wk: 'wk-ton'    },
-      { id: 'video',  label: 'Video',  wk: 'wk-video'  },
-    ];
-    const WK_MAP     = Object.fromEntries(GROUPS.map(g => [g.id, g.wk]));
-    const STATUS_CLS = ['status-todo','status-doing','status-wait','status-critical','status-done'];
-    const FORMAT_CLS = ['fmt-bold','fmt-italic','fmt-underline'];
-    const WK_CLS     = GROUPS.map(g => g.wk);
-
     function splitCls(s)  { return String(s||'').split(/\s+/).map(x=>x.trim()).filter(Boolean); }
     function joinCls(arr) { return [...new Set(arr)].join(' ').trim(); }
 
     function buildCls({ groupId, status, bold, italic, underline, existing }) {
       let c = splitCls(existing).filter(x => !STATUS_CLS.includes(x) && !FORMAT_CLS.includes(x) && !WK_CLS.includes(x));
-      if (WK_MAP[groupId]) c.push(WK_MAP[groupId]);
-      if (status)   c.push(status);
-      if (bold)     c.push('fmt-bold');
-      if (italic)   c.push('fmt-italic');
-      if (underline)c.push('fmt-underline');
+      if (WK_MAP[groupId])  c.push(WK_MAP[groupId]);
+      if (status)           c.push(status);
+      if (bold)             c.push('fmt-bold');
+      if (italic)           c.push('fmt-italic');
+      if (underline)        c.push('fmt-underline');
       return joinCls(c);
     }
 
     function applyColor(style, hex, mode) {
-      const s = String(style||'').replace(/background:\s*#[\da-fA-F]{3,8}\s*;?/g,'').replace(/border-color:\s*#[\da-fA-F]{3,8}\s*;?/g,'').trim();
+      const s = String(style||'')
+        .replace(/background:\s*#[\da-fA-F]{3,8}\s*;?/g, '')
+        .replace(/border-color:\s*#[\da-fA-F]{3,8}\s*;?/g, '')
+        .trim();
       if (!hex || mode === 'none') return s;
       const parts = s ? [s.endsWith(';') ? s : s+';'] : [];
       if (mode==='bg'||mode==='both')     parts.push(`background:${hex};`);
@@ -275,18 +426,16 @@
       return parts.join(' ');
     }
 
-    // ── vis.DataSet – immer 4 feste Gruppen ───────────────
-    // Gruppen kommen IMMER aus dem Code, nie aus localStorage.
-    // So können alte/falsche gespeicherte Gruppen nie mehr Probleme machen.
+    // ── Gruppen — immer aus dem Code, nie aus localStorage ─
     const groups = new vis.DataSet(
       GROUPS.map(g => ({ id: g.id, content: g.label, className: g.wk }))
     );
 
-    // ── Demo-Aufgaben (relativ zu heute) ──────────────────
+    // ── Demo-Daten (relativ zu heute) ──────────────────────
     function defaultItems() {
       const p = todayStr();
       return [
-        { id:'t1', group:'buehne', content:'Bühnenaufbau',        start:`${p} 08:00`, end:`${p} 12:00`, className:'status-todo',             type:'range' },
+        { id:'t1', group:'buehne', content:'B\u00fchnenaufbau',        start:`${p} 08:00`, end:`${p} 12:00`, className:'status-todo',             type:'range' },
         { id:'t2', group:'ton',    content:'PA aufbauen & Kabel',  start:`${p} 09:00`, end:`${p} 12:00`, className:'status-todo',             type:'range' },
         { id:'t3', group:'licht',  content:'Rig aufbauen',         start:`${p} 09:00`, end:`${p} 12:00`, className:'status-todo',             type:'range' },
         { id:'t4', group:'ton',    content:'Soundcheck',           start:`${p} 12:00`, end:`${p} 13:00`, className:'status-critical fmt-bold', type:'range' },
@@ -321,142 +470,41 @@
       const start = parseStr(x.start) || x.start;
       const end   = x.end ? (parseStr(x.end) || x.end) : undefined;
       const cls   = splitCls(x.className);
-      const className = buildCls({
-        groupId: x.group,
-        status:  cls.find(c => STATUS_CLS.includes(c)) || 'status-todo',
-        bold:    cls.includes('fmt-bold'),
-        italic:  cls.includes('fmt-italic'),
-        underline: cls.includes('fmt-underline'),
-        existing: x.className,
-      });
-      return { ...x, start, end, className, type: 'range' };
+      return {
+        ...x,
+        start,
+        end,
+        type: 'range',
+        className: buildCls({
+          groupId:   x.group,
+          status:    cls.find(c => STATUS_CLS.includes(c)) || 'status-todo',
+          bold:      cls.includes('fmt-bold'),
+          italic:    cls.includes('fmt-italic'),
+          underline: cls.includes('fmt-underline'),
+          existing:  x.className,
+        }),
+      };
     });
     const items = new vis.DataSet(rawItems);
 
-    // ── Höhenberechnung ────────────────────────────────────
+    // ── H\u00f6henberechnung ────────────────────────────────────────
+    // Wir messen #wrap.offsetHeight (nach dem Flex-Layout) statt
+    // window.innerHeight minus Header — zuverl\u00e4ssiger auf iOS.
     const rowStyleEl = document.getElementById('rowStyle');
 
     function calcHeight() {
-      const headerH   = document.querySelector('header').offsetHeight;
-      const available = window.innerHeight - headerH - 20; // 20 = wrap padding
+      const wrap      = document.getElementById('wrap');
+      const available = wrap.offsetHeight - 20; // 10px padding oben + unten
       const axisH     = 52;
       const rowH      = Math.max(Math.floor((available - axisH) / GROUPS.length), 60);
       rowStyleEl.textContent = [
-        `.vis-timeline .vis-group { min-height:${rowH}px !important; }`,
-        `.vis-timeline .vis-label { min-height:${rowH}px !important; }`,
+        `.vis-timeline .vis-group { min-height: ${rowH}px !important; }`,
+        `.vis-timeline .vis-label { min-height: ${rowH}px !important; }`,
       ].join('\n');
-      return rowH * GROUPS.length + axisH;
+      return available;
     }
 
-    // ── Timeline ───────────────────────────────────────────
-    const timeline = new vis.Timeline(
-      document.getElementById('timeline'),
-      items,
-      groups,
-      {
-        height:          calcHeight(),   // ← sofort beim Erstellen übergeben
-        stack:           false,
-        groupHeightMode: 'auto',
-        zoomMin:         1000 * 60 * 30,
-        zoomMax:         1000 * 60 * 60 * 24 * 30,
-        selectable:      true,
-        multiselect:     false,
-        showCurrentTime: true,
-        margin:          { item: 8, axis: 5 },
-        editable:        { add: true, updateTime: true, updateGroup: true, remove: true },
-        onAdd(item, cb) {
-          openEditor({ mode:'add', item:{ ...item, id:uid(), type:'range' } }, r => {
-            cb(r ?? null);
-            if (r) saveData();
-          });
-        },
-        onUpdate(item, cb) {
-          openEditor({ mode:'edit', item:{ ...item } }, r => {
-            cb(r ?? null);
-            if (r) saveData();
-          });
-        },
-        onRemove(item, cb) {
-          if (!confirm(`Aufgabe löschen?\n\n${item.content}`)) return cb(null);
-          cb(item);
-          saveData();
-        },
-      }
-    );
-
-    // Fenster-Resize
-    window.addEventListener('resize', () => {
-      timeline.setOptions({ height: calcHeight() });
-    });
-
-    // Autosave
-    items.on('*', saveData);
-
-    // Starfokus: heute
-    (function focusToday() {
-      const t = new Date();
-      timeline.setWindow(
-        new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
-        new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
-        { animation: false }
-      );
-    })();
-
-    document.getElementById('focusDate').value = todayStr();
-
-    // ── Toolbar ────────────────────────────────────────────
-    document.getElementById('addBtn').onclick = () => {
-      const now   = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours()+1, 0);
-      const end   = new Date(start.getTime() + 2*60*60*1000);
-      const gid   = GROUPS[0].id;
-      openEditor({
-        mode: 'add',
-        item: { id:uid(), group:gid, content:'', start, end, type:'range',
-          className: buildCls({ groupId:gid, status:'status-todo', existing:'' }) }
-      }, r => { if (!r) return; items.add(r); saveData(); });
-    };
-
-    document.getElementById('delBtn').onclick = () => {
-      const sel = timeline.getSelection();
-      if (!sel.length) return alert('Bitte zuerst eine Aufgabe antippen.');
-      const it = items.get(sel[0]);
-      if (!confirm(`Aufgabe löschen?\n\n${it.content}`)) return;
-      items.remove(sel[0]);
-      saveData();
-    };
-
-    document.getElementById('resetBtn').onclick = () => {
-      if (!confirm('Demo-Plan laden? Gespeicherte Daten werden überschrieben.')) return;
-      localStorage.removeItem(STORAGE_KEY);
-      location.reload();
-    };
-
-    document.getElementById('focusTodayBtn').onclick = () => {
-      const t = new Date();
-      timeline.setWindow(
-        new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
-        new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
-        { animation: true }
-      );
-    };
-
-    document.getElementById('focusAllBtn').onclick = () => timeline.fit({ animation: true });
-
-    document.getElementById('focusPickBtn').onclick = () => {
-      const v = document.getElementById('focusDate').value;
-      if (!v) return alert('Bitte erst ein Datum wählen.');
-      const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!m) return;
-      const d = new Date(+m[1], +m[2]-1, +m[3]);
-      timeline.setWindow(
-        new Date(d.getFullYear(), d.getMonth(), d.getDate(),  6, 0),
-        new Date(d.getFullYear(), d.getMonth(), d.getDate(), 22, 0),
-        { animation: true }
-      );
-    };
-
-    // ── Modal ──────────────────────────────────────────────
+    // ── Modal-Referenzen ───────────────────────────────────
     const dlg   = document.getElementById('editDialog');
     const fName = document.getElementById('f_content');
     const fStart= document.getElementById('f_start');
@@ -477,7 +525,8 @@
     });
 
     function openEditor({ mode, item }, done) {
-      document.getElementById('modalTitle').textContent = mode === 'add' ? 'Aufgabe hinzufügen' : 'Aufgabe bearbeiten';
+      document.getElementById('modalTitle').textContent =
+        mode === 'add' ? 'Aufgabe hinzuf\u00fcgen' : 'Aufgabe bearbeiten';
 
       fGrp.innerHTML = '';
       GROUPS.forEach(g => {
@@ -506,14 +555,15 @@
 
         const start = parseStr(fStart.value);
         const end   = fEnd.value.trim() ? parseStr(fEnd.value) : null;
-        if (!start) { alert('Bitte ein gültiges Startdatum wählen.'); return done(null); }
+        if (!start) { alert('Bitte ein g\u00fcltiges Startdatum w\u00e4hlen.'); return done(null); }
         if (end && end < start) { alert('Ende darf nicht vor Start liegen.'); return done(null); }
 
         const gid = fGrp.value;
         done({
           ...item,
           content:   fName.value.trim() || 'Ohne Titel',
-          start, end: end || undefined,
+          start,
+          end:       end || undefined,
           group:     gid,
           className: buildCls({ groupId:gid, status:fStat.value, bold:fBold.checked, italic:fItal.checked, underline:fUnde.checked, existing:item.className }),
           style:     applyColor(item.style, fCol.value, fColM.value) || undefined,
@@ -526,6 +576,119 @@
       dlg.showModal();
       fName.focus(); fName.select();
     }
+
+    // ── Timeline — in requestAnimationFrame erstellen ──────
+    // RAF stellt sicher, dass der Browser das Flex-Layout abgeschlossen
+    // hat, bevor wir #wrap.offsetHeight messen.
+    let timeline;
+
+    requestAnimationFrame(() => {
+      timeline = new vis.Timeline(
+        document.getElementById('timeline'),
+        items,
+        groups,
+        {
+          height:          calcHeight(),
+          stack:           false,
+          groupHeightMode: 'auto',
+          zoomMin:         1000 * 60 * 30,
+          zoomMax:         1000 * 60 * 60 * 24 * 30,
+          selectable:      true,
+          multiselect:     false,
+          showCurrentTime: true,
+          margin:          { item: 8, axis: 5 },
+          editable:        { add: true, updateTime: true, updateGroup: true, remove: true },
+          onAdd(item, cb) {
+            openEditor({ mode:'add', item:{ ...item, id:uid(), type:'range' } }, r => {
+              cb(r ?? null);
+              if (r) saveData();
+            });
+          },
+          onUpdate(item, cb) {
+            openEditor({ mode:'edit', item:{ ...item } }, r => {
+              cb(r ?? null);
+              if (r) saveData();
+            });
+          },
+          onRemove(item, cb) {
+            if (!confirm(`Aufgabe l\u00f6schen?\n\n${item.content}`)) return cb(null);
+            cb(item);
+            saveData();
+          },
+        }
+      );
+
+      // Heute anzeigen
+      const t = new Date();
+      timeline.setWindow(
+        new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
+        new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
+        { animation: false }
+      );
+
+      // Toolbar-Events (brauchen timeline-Referenz)
+      document.getElementById('addBtn').onclick = () => {
+        const now   = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours()+1, 0);
+        const end   = new Date(start.getTime() + 2*60*60*1000);
+        const gid   = GROUPS[0].id;
+        openEditor({
+          mode: 'add',
+          item: { id:uid(), group:gid, content:'', start, end, type:'range',
+            className: buildCls({ groupId:gid, status:'status-todo', existing:'' }) }
+        }, r => { if (!r) return; items.add(r); saveData(); });
+      };
+
+      document.getElementById('delBtn').onclick = () => {
+        const sel = timeline.getSelection();
+        if (!sel.length) return alert('Bitte zuerst eine Aufgabe antippen.');
+        const it = items.get(sel[0]);
+        if (!confirm(`Aufgabe l\u00f6schen?\n\n${it.content}`)) return;
+        items.remove(sel[0]);
+        saveData();
+      };
+
+      document.getElementById('focusTodayBtn').onclick = () => {
+        const t = new Date();
+        timeline.setWindow(
+          new Date(t.getFullYear(), t.getMonth(), t.getDate(),  6, 0),
+          new Date(t.getFullYear(), t.getMonth(), t.getDate(), 22, 0),
+          { animation: true }
+        );
+      };
+
+      document.getElementById('focusAllBtn').onclick = () => timeline.fit({ animation: true });
+
+      document.getElementById('focusPickBtn').onclick = () => {
+        const v = document.getElementById('focusDate').value;
+        if (!v) return alert('Bitte erst ein Datum w\u00e4hlen.');
+        const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return;
+        const d = new Date(+m[1], +m[2]-1, +m[3]);
+        timeline.setWindow(
+          new Date(d.getFullYear(), d.getMonth(), d.getDate(),  6, 0),
+          new Date(d.getFullYear(), d.getMonth(), d.getDate(), 22, 0),
+          { animation: true }
+        );
+      };
+
+      // Fenster-Resize
+      window.addEventListener('resize', () => {
+        timeline.setOptions({ height: calcHeight() });
+      });
+
+      // Autosave
+      items.on('*', saveData);
+    });
+
+    // Datum-Input vorbelegen
+    document.getElementById('focusDate').value = todayStr();
+
+    document.getElementById('resetBtn').onclick = () => {
+      if (!confirm('Demo-Plan laden? Gespeicherte Daten werden \u00fcberschrieben.')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    };
   </script>
 </body>
 </html>
