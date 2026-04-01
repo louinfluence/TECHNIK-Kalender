@@ -509,24 +509,27 @@
     }
 
     // -----------------------------------------------
-    // Zeilenhöhe dynamisch berechnen und per CSS setzen
-    // Jede der 4 Zeilen bekommt genau 1/4 des Platzes
+    // Layout-Berechnung
+    // Gibt die Gesamt-Timeline-Höhe zurück und setzt
+    // min-height per CSS auf jede Zeile (NUR min-height,
+    // kein height – sonst überschreibt vis-timeline es)
     // -----------------------------------------------
     const dynStyle = document.getElementById("dynStyle");
 
-    function updateRowHeight() {
-      const headerH  = document.querySelector("header").offsetHeight;
-      const available = window.innerHeight - headerH - 20; // 20 = wrap padding
-      const axisH    = 52; // Zeitachse unten (vis-timeline Standard)
-      const numRows  = defaultGroups.length;
-      const rowH     = Math.max(Math.floor((available - axisH) / numRows), 60);
+    function updateLayout() {
+      const headerH   = document.querySelector("header").offsetHeight;
+      const available = window.innerHeight - headerH - 20;
+      const axisH     = 52;
+      const numRows   = defaultGroups.length; // 4
+      const rowH      = Math.max(Math.floor((available - axisH) / numRows), 60);
       dynStyle.textContent = `
-        .vis-timeline .vis-group { min-height: ${rowH}px !important; height: ${rowH}px !important; }
-        .vis-timeline .vis-label { min-height: ${rowH}px !important; height: ${rowH}px !important; }
+        .vis-timeline .vis-group { min-height: ${rowH}px !important; }
+        .vis-timeline .vis-label { min-height: ${rowH}px !important; }
       `;
+      return rowH * numRows + axisH; // exakte Gesamthöhe für vis-timeline
     }
 
-    updateRowHeight(); // vor Timeline-Init aufrufen
+    updateLayout(); // CSS setzen bevor Timeline entsteht
 
     // -----------------------------------------------
     // Timeline initialisieren
@@ -536,9 +539,9 @@
 
     const options = {
       stack:           false,
-      groupHeightMode: "fixed",
-      zoomMin:         1000 * 60 * 30,            // 30 min
-      zoomMax:         1000 * 60 * 60 * 24 * 30,  // 30 Tage
+      groupHeightMode: "auto",   // "auto" lässt CSS min-height wirken
+      zoomMin:         1000 * 60 * 30,
+      zoomMax:         1000 * 60 * 60 * 24 * 30,
       selectable:      true,
       multiselect:     false,
       showCurrentTime: true,
@@ -575,10 +578,12 @@
       timeline.setWindow(s, e, { animation: true });
     }
 
-    // Zeilen neu berechnen bei Drehen / Resize
+    // Höhe direkt nach Init an vis-timeline übergeben
+    timeline.setOptions({ height: updateLayout() });
+
+    // Bei Drehen / Resize neu berechnen
     window.addEventListener("resize", () => {
-      updateRowHeight();
-      timeline.redraw();
+      timeline.setOptions({ height: updateLayout() });
     });
 
     // Standard: heute anzeigen
